@@ -9,10 +9,22 @@ resource "digitalocean_droplet" "web" {
     tags = ["${var.name}-webserver", "agh-ask-project"]
 
     user_data = <<EOF
+    #cloud-config
+    packages:
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+        - git
     runcmd:
-      - git clone https://github.com/mdrazek-agh/terraform-app.git
-      - cd terraform-app
-      - docker build -t tomcat-web .
+        - curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        - apt-get update
+        - apt-get -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+        - git clone https://github.com/mdrazek-agh/terraform-app.git
+        - cd terraform-app
+        - docker build -t tomcat-web .
+        - docker run -dp 80:8080 tomcat-web
     EOF
 
     lifecycle {
@@ -39,11 +51,20 @@ resource "digitalocean_loadbalancer" "web" {
     droplet_ids = digitalocean_droplet.web.*.id
     vpc_uuid = digitalocean_vpc.web.id
     redirect_http_to_https = true
-    
+    healthcheck {
+        protocol = "http"
+        port = 80
+        path = "/sample"
+        check_interval_seconds = 10
+        response_timeout_seconds = 5
+        unhealthy_threshold = 3
+        healthy_threshold = 5
+    }
+
     forwarding_rule {
         entry_port = 443
         entry_protocol = "https"
-
+    
         target_port = 80
         target_protocol = "http"
 

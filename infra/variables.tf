@@ -49,8 +49,9 @@ variable "database_size" {
 
 variable "image" {
     type = string
-    default = "docker-20-04"
+    default = "debian-11-x64"
 }
+
 
 variable "bastion-image" {
     type = string
